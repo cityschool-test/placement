@@ -96,6 +96,8 @@ async function accueil() {
     <div class="carte">
       <h2>1. Choisis ton test</h2>
       <div class="tests">${etat.tests.map(t => `<button data-t="${t.id}"><b>${h(t.nom)}</b><span class="mut">${h(t.public)}</span></button>`).join('')}</div>
+      <label class="champ" style="margin-top:14px"><span>Version du test <span class="mut">(à régler par l’accueil seulement si un frère, une sœur ou un ami a déjà passé le test)</span></span>
+        <select id="version"><option value="">🎲 Au hasard (conseillé)</option><option value="1">Test 1</option><option value="2">Test 2</option><option value="3">Test 3</option></select></label>
     </div>
     <div class="carte">
       <h2>2. Tes informations</h2>
@@ -124,7 +126,7 @@ async function demarrer() {
   if (!v('code') || !v('prenom') || !v('nom')) { err.textContent = 'Remplis le code, ton prénom et ton nom.'; return; }
   $('#go').disabled = true; $('#go').textContent = 'Chargement…';
   let r;
-  try { r = await api({ action:'start', test:etat.testChoisi, code:v('code'), prenom:v('prenom'), nom:v('nom'), classe:v('classe'), mode:v('mode'), prof:v('prof') }); }
+  try { r = await api({ action:'start', test:etat.testChoisi, code:v('code'), prenom:v('prenom'), nom:v('nom'), classe:v('classe'), mode:v('mode'), prof:v('prof'), version:$('#version').value }); }
   catch (e) { r = { ok:false, erreur:'Connexion impossible. Réessaie.' }; }
   if (!r.ok) { err.textContent = r.erreur; $('#go').disabled = false; $('#go').textContent = 'Commencer le test →'; return; }
   etat.session = r.session; etat.test = r.test;
@@ -331,6 +333,7 @@ async function envoyer() {
       <div class="grand">${h(R.final)}</div>
       <p><b>${h(NIVEAUX[R.final] || '')}</b></p>
       <p>${h(R.message || '')}</p>
+      ${R.test ? `<p class="mut">${h(R.test)}</p>` : ''}
     </div>
     <div class="carte"><h3>Détail par compétence</h3>
       ${R.competences.map(c => `<div class="ligne"><span>${h(c.nom)}</span><span class="pastille">${h(c.niveau)}</span></div>`).join('')}
