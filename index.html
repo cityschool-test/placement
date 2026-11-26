@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>City School · English placement test</title>
+<style>
+  :root { --navy:#1f2a44; --gold:#c8961e; --gold-l:#fff4d9; --bg:#f3f6fb; --card:#fff; --txt:#1d2433; --mut:#5d6779; --ok:#1e8e3e; --err:#c5221f; --line:#dfe4ee; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; background:var(--bg); color:var(--txt); font-size:17px; line-height:1.5; }
+  header { background:var(--navy); color:#fff; padding:14px 18px; display:flex; align-items:center; gap:12px; }
+  header .logo { font-weight:800; font-size:20px; letter-spacing:.3px; }
+  header .logo span { color:var(--gold); }
+  header .sous { opacity:.8; font-size:14px; }
+  #barre { height:6px; background:#dfe4ee; } #barre div { height:100%; width:0; background:var(--gold); transition:width .3s; }
+  main { max-width:760px; margin:0 auto; padding:18px 16px 90px; }
+  .carte { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; margin:14px 0; box-shadow:0 1px 2px rgba(0,0,0,.04); }
+  h1 { font-size:24px; margin:6px 0 4px; } h2 { font-size:20px; margin:0 0 6px; } h3 { font-size:17px; margin:0 0 8px; }
+  .mut { color:var(--mut); font-size:15px; }
+  .texte { background:var(--gold-l); border-radius:10px; padding:14px; white-space:pre-wrap; }
+  label.ch { display:block; border:1.5px solid var(--line); border-radius:10px; padding:10px 12px; margin:6px 0; cursor:pointer; background:#fff; }
+  label.ch:hover { border-color:var(--gold); }
+  label.ch input { margin-right:8px; transform:scale(1.15); }
+  label.ch.sel { border-color:var(--navy); background:#eef2fa; }
+  label.ch.jnsp { color:var(--mut); font-size:15px; }
+  .q { margin:18px 0 4px; font-weight:600; }
+  input[type=text], select, textarea { width:100%; font:inherit; padding:10px 12px; border:1.5px solid var(--line); border-radius:10px; background:#fff; }
+  textarea { min-height:150px; resize:vertical; }
+  .champ { margin:10px 0; } .champ > span { display:block; font-weight:600; margin-bottom:4px; font-size:15px; }
+  .btn { display:inline-flex; align-items:center; gap:8px; border:0; border-radius:10px; padding:12px 18px; font:inherit; font-weight:700; cursor:pointer; background:var(--navy); color:#fff; }
+  .btn.or { background:var(--gold); color:#1d1d1d; } .btn.clair { background:#e8ecf4; color:var(--navy); }
+  .btn:disabled { opacity:.45; cursor:not-allowed; }
+  .btn.rec { background:var(--err); }
+  .tests { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; }
+  .tests button { text-align:left; border:2px solid var(--line); background:#fff; border-radius:12px; padding:14px; font:inherit; cursor:pointer; }
+  .tests button.sel { border-color:var(--gold); background:var(--gold-l); }
+  .tests b { display:block; font-size:18px; }
+  .nav { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid var(--line); padding:10px 16px; display:flex; justify-content:space-between; align-items:center; }
+  .nav .info { color:var(--mut); font-size:14px; }
+  .erreur { color:var(--err); font-weight:600; margin-top:8px; }
+  .audio { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .pastille { display:inline-block; min-width:64px; text-align:center; padding:4px 10px; border-radius:999px; font-weight:800; background:var(--navy); color:#fff; }
+  .rec-zone { border:1.5px dashed var(--line); border-radius:12px; padding:14px; margin:10px 0; }
+  .rec-zone.fait { border-style:solid; border-color:var(--ok); }
+  .transcr { color:var(--mut); font-style:italic; margin-top:6px; min-height:1.4em; }
+  .resultat { text-align:center; }
+  .grand { font-size:56px; font-weight:900; color:var(--navy); margin:4px 0; }
+  .ligne { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); }
+  .spinner { width:46px; height:46px; border:5px solid var(--line); border-top-color:var(--gold); border-radius:50%; animation:t 1s linear infinite; margin:20px auto; }
+  @keyframes t { to { transform:rotate(360deg); } }
+  .cache { display:none !important; }
+  @media (max-width:480px){ body{font-size:16px;} .grand{font-size:44px;} }
+</style>
+</head>
+<body>
+<header><div class="logo">city <span>school</span></div><div class="sous">English placement test · Test de niveau</div></header>
+<div id="barre"><div></div></div>
+<main id="app"><div class="spinner"></div></main>
+<div class="nav cache" id="nav"><button class="btn clair" id="precedent">← Retour</button><span class="info" id="pageinfo"></span><button class="btn or" id="suivant">Suivant →</button></div>
+
+<script>
+/* Adresse de l’API Apps Script : utilisée seulement quand la page est hébergée hors de Google (GitHub Pages). */
+const API_URL = 'https://script.google.com/macros/s/AKfycbz4hPYOpxkpy6W98GAfSMN5QiaSIQZoTbir815V_9HefoQpuu8MLuietRBHcuYiVBmR/exec';
+const JNSP = '🤷 Je ne sais pas / I don’t know';
+const NIVEAUX = { 'Initiation':'Découverte', 'Pré-A1':'Premiers pas', 'A1':'Débutant', 'A2':'Élémentaire', 'B1':'Intermédiaire', 'B2':'Avancé', 'C1':'Très avancé' };
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+const etat = { tests:[], testChoisi:null, session:null, test:null, pages:[], page:0, reponses:{}, ecrit:[], oral:{ lecture:{}, libre:{}, micro:false }, ecoutes:{}, audios:{} };
+const $ = (s, el=document) => el.querySelector(s);
+const app = $('#app');
+const h = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function api(payload) {
+  return new Promise((ok, ko) => {
+    if (window.google && google.script && google.script.run) {
+      google.script.run.withSuccessHandler(t => ok(JSON.parse(t))).withFailureHandler(ko).api(JSON.stringify(payload));
+    } else {
+      fetch(API_URL, { method:'POST', body: JSON.stringify(payload) }).then(r => r.json()).then(ok, ko);
+    }
+  });
+}
+
+/* ========================= ACCUEIL ========================= */
+async function accueil() {
+  let r;
+  try { r = await api({ action:'tests' }); } catch (e) { app.innerHTML = '<div class="carte erreur">Connexion impossible. Vérifie Internet puis recharge la page.</div>'; return; }
+  etat.tests = r.tests;
+  app.innerHTML = `
+    <div class="carte">
+      <h1>Welcome! Bienvenue 👋</h1>
+      <p>Ce test n’est <b>pas une note</b> : il sert à trouver le groupe qui te correspond. Les questions deviennent de plus en plus difficiles, c’est normal.
+      Si tu ne sais pas, choisis <b>« ${h(JNSP)} »</b> plutôt que de deviner.</p>
+      <p class="mut">Tu vas écouter, lire, écrire et parler en anglais (micro nécessaire). Durée : 30 à 50 minutes. Pas de dictionnaire, de traducteur ni d’IA.</p>
+      ${SR ? '' : '<p class="erreur">⚠️ Ce navigateur ne permet pas l’oral automatique. Utilise Google Chrome si possible.</p>'}
+    </div>
+    <div class="carte">
+      <h2>1. Choisis ton test</h2>
+      <div class="tests">${etat.tests.map(t => `<button data-t="${t.id}"><b>${h(t.nom)}</b><span class="mut">${h(t.public)}</span></button>`).join('')}</div>
+    </div>
+    <div class="carte">
+      <h2>2. Tes informations</h2>
+      <label class="champ"><span>🔑 Code d’accès (donné par ton professeur)</span><input type="text" id="code" autocomplete="off"></label>
+      <label class="champ"><span>Prénom / First name</span><input type="text" id="prenom" autocomplete="off"></label>
+      <label class="champ"><span>Nom / Last name</span><input type="text" id="nom" autocomplete="off"></label>
+      <label class="champ"><span>Classe / School year</span><select id="classe"><option value="">— Choisis d’abord ton test —</option></select></label>
+      <label class="champ"><span>Je passe le test…</span><select id="mode"><option>Sur place, à City School</option><option>À distance, en visio</option></select></label>
+      <label class="champ"><span>Nom du professeur (facultatif)</span><input type="text" id="prof" autocomplete="off"></label>
+      <button class="btn or" id="go">Commencer le test →</button>
+      <div class="erreur" id="err"></div>
+    </div>`;
+  app.querySelectorAll('.tests button').forEach(b => b.onclick = () => {
+    app.querySelectorAll('.tests button').forEach(x => x.classList.remove('sel')); b.classList.add('sel');
+    etat.testChoisi = b.dataset.t;
+    const t = etat.tests.find(x => x.id === b.dataset.t);
+    $('#classe').innerHTML = t.classes.map(c => `<option>${h(c)}</option>`).join('');
+  });
+  $('#go').onclick = demarrer;
+}
+
+async function demarrer() {
+  const err = $('#err'); err.textContent = '';
+  if (!etat.testChoisi) { err.textContent = 'Choisis ton test (Primaire, Collège ou Lycée).'; return; }
+  const v = id => $('#' + id).value.trim();
+  if (!v('code') || !v('prenom') || !v('nom')) { err.textContent = 'Remplis le code, ton prénom et ton nom.'; return; }
+  $('#go').disabled = true; $('#go').textContent = 'Chargement…';
+  let r;
+  try { r = await api({ action:'start', test:etat.testChoisi, code:v('code'), prenom:v('prenom'), nom:v('nom'), classe:v('classe'), mode:v('mode'), prof:v('prof') }); }
+  catch (e) { r = { ok:false, erreur:'Connexion impossible. Réessaie.' }; }
+  if (!r.ok) { err.textContent = r.erreur; $('#go').disabled = false; $('#go').textContent = 'Commencer le test →'; return; }
+  etat.session = r.session; etat.test = r.test;
+  construirePages();
+  window.onbeforeunload = () => 'Ton test n’est pas terminé.';
+  $('#nav').classList.remove('cache');
+  afficherPage(0);
+}
+
+/* ========================= PAGES ========================= */
+function construirePages() {
+  const p = [];
+  etat.test.sections.forEach(sec => {
+    if (sec.pageParGroupe) sec.groupes.forEach((g, i) => p.push({ type:'qcm', sec, groupes:[g], rang:i+1, nb:sec.groupes.length }));
+    else p.push({ type:'qcm', sec, groupes:sec.groupes });
+  });
+  p.push({ type:'ecrit' });
+  p.push({ type:'oral' });
+  etat.pages = p;
+}
+
+function afficherPage(i) {
+  etat.page = i; window.scrollTo(0, 0);
+  const pg = etat.pages[i];
+  $('#barre div').style.width = Math.round(100 * i / etat.pages.length) + '%';
+  $('#pageinfo').textContent = 'Page ' + (i + 1) + ' / ' + etat.pages.length;
+  $('#precedent').disabled = i === 0;
+  $('#suivant').textContent = i === etat.pages.length - 1 ? 'Envoyer mes réponses ✓' : 'Suivant →';
+  if (pg.type === 'qcm') pageQcm(pg);
+  else if (pg.type === 'ecrit') pageEcrit();
+  else pageOral();
+}
+
+function pageQcm(pg) {
+  const titre = pg.sec.titre + (pg.nb > 1 ? ` (${pg.rang}/${pg.nb})` : '');
+  app.innerHTML = `<div class="carte"><h2>${h(titre)}</h2><p class="mut">${h(pg.sec.consigne.replace(/Your teacher reads each recording twice\.? ?|Écoute ton professeur\. Il lit chaque document 2 fois\. ?|\/ Le professeur lit chaque document 2 fois\./g, ''))}</p></div>` +
+    pg.groupes.map(g => `
+      <div class="carte">
+        ${g.titre ? `<h3>${h(g.titre)}</h3>` : ''}
+        ${g.audio ? `<div class="audio"><button class="btn" data-audio="${g.audio}">▶️ Écouter / Listen</button><span class="mut" id="n_${g.audio}">2 écoutes maximum</span></div>` : ''}
+        ${g.texte ? `<div class="texte">${h(g.texte)}</div>` : ''}
+        ${g.items.map(it => `
+          <div class="q">${h(it.q)}</div>
+          ${it.choix.map(c => `<label class="ch ${c === JNSP ? 'jnsp' : ''} ${etat.reponses[it.id] === c ? 'sel' : ''}"><input type="radio" name="${it.id}" value="${h(c)}" ${etat.reponses[it.id] === c ? 'checked' : ''}>${h(c)}</label>`).join('')}
+        `).join('')}
+      </div>`).join('') + '<div class="erreur" id="err"></div>';
+  app.querySelectorAll('input[type=radio]').forEach(r => r.onchange = () => {
+    etat.reponses[r.name] = r.value;
+    app.querySelectorAll(`input[name="${r.name}"]`).forEach(x => x.parentElement.classList.toggle('sel', x.checked));
+  });
+  app.querySelectorAll('[data-audio]').forEach(b => { majBoutonAudio(b); b.onclick = () => jouer(b); });
+}
+
+function majBoutonAudio(b) {
+  const id = b.dataset.audio, n = etat.ecoutes[id] || 0;
+  $('#n_' + id).textContent = n >= 2 ? 'Écoutes terminées' : (2 - n) + ' écoute(s) restante(s)';
+  b.disabled = n >= 2;
+}
+
+async function jouer(b) {
+  const id = b.dataset.audio;
+  if ((etat.ecoutes[id] || 0) >= 2) return;
+  b.disabled = true; b.textContent = '⏳ Chargement…';
+  try {
+    if (!etat.audios[id]) {
+      const r = await api({ action:'audio', session:etat.session, id });
+      if (!r.ok) throw new Error(r.erreur);
+      const bin = atob(r.data), buf = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+      etat.audios[id] = URL.createObjectURL(new Blob([buf], { type:r.type }));
+    }
+    const a = new Audio(etat.audios[id]);
+    etat.ecoutes[id] = (etat.ecoutes[id] || 0) + 1;
+    b.textContent = '🔊 Écoute en cours…';
+    a.onended = () => { b.textContent = '▶️ Écouter / Listen'; majBoutonAudio(b); };
+    await a.play();
+  } catch (e) { b.disabled = false; b.textContent = '▶️ Réessayer'; }
+}
+
+function pageEcrit() {
+  app.innerHTML = `<div class="carte"><h2>✍️ Écrire · Writing</h2><p class="mut">Écris directement en anglais. Le copier-coller est désactivé. Tu peux laisser la tâche 2 vide si la tâche 1 était difficile.</p></div>` +
+    etat.test.ecrit.map((e, i) => `
+      <div class="carte"><h3>${h(e.titre)}</h3><p>${h(e.consigne)}</p>
+      <textarea data-i="${i}" spellcheck="false" autocomplete="off">${h(etat.ecrit[i] || '')}</textarea>
+      <div class="mut" id="mots${i}"></div></div>`).join('');
+  app.querySelectorAll('textarea').forEach(t => {
+    const maj = () => { etat.ecrit[t.dataset.i] = t.value; const n = (t.value.match(/[A-Za-z’']+/g) || []).length; $('#mots' + t.dataset.i).textContent = n + ' mot(s)'; };
+    t.oninput = maj; maj();
+    t.onpaste = t.ondrop = ev => { ev.preventDefault(); alert('Le copier-coller est désactivé : écris toi-même 🙂'); };
+  });
+}
+
+/* ========================= ORAL ========================= */
+let ecoute = null;
+function pageOral() {
+  const o = etat.test.oral;
+  app.innerHTML = `
+    <div class="carte"><h2>🎤 Parler · Speaking</h2>
+      <p>Tu vas parler en anglais dans le micro. Quand ton navigateur le demande, clique sur <b>« Autoriser »</b> pour le micro.</p>
+      ${SR ? '' : '<p class="erreur">⚠️ L’oral automatique ne marche pas sur ce navigateur (utilise Google Chrome). Tu peux quand même envoyer ton test.</p>'}
+      <div class="erreur" id="micerr"></div></div>
+    <div class="carte"><h3>A. Lis à voix haute · Read aloud</h3><p class="mut">Clique sur 🎤, lis la phrase clairement, puis attends.</p>
+      ${o.lecture.map(l => `<div class="rec-zone ${etat.oral.lecture[l.id] ? 'fait' : ''}" id="z_${l.id}"><div class="texte" style="font-size:19px">${h(l.phrase)}</div>
+        <p><button class="btn" data-lire="${l.id}" ${SR ? '' : 'disabled'}>🎤 Lire</button></p><div class="transcr" id="t_${l.id}">${h(etat.oral.lecture[l.id] || '')}</div></div>`).join('')}
+    </div>
+    <div class="carte"><h3>B. Réponds · Answer the questions</h3><p class="mut">Clique sur 🎤, réponds en anglais (jusqu’à 1 minute), puis clique sur ⏹. Fais des phrases complètes !</p>
+      ${o.libre.map(q => `<div class="rec-zone ${etat.oral.libre[q.id] ? 'fait' : ''}" id="z_${q.id}"><div class="q">${h(q.question)}</div>
+        <p><button class="btn" data-rep="${q.id}" ${SR ? '' : 'disabled'}>🎤 Répondre</button> <span class="mut" id="c_${q.id}"></span></p>
+        <div class="transcr" id="t_${q.id}">${h((etat.oral.libre[q.id] || {}).texte || '')}</div></div>`).join('')}
+    </div>`;
+  app.querySelectorAll('[data-lire]').forEach(b => b.onclick = () => enregistrer(b, b.dataset.lire, false));
+  app.querySelectorAll('[data-rep]').forEach(b => b.onclick = () => enregistrer(b, b.dataset.rep, true));
+}
+
+function enregistrer(b, id, libre) {
+  if (ecoute) { ecoute.arreter(); return; }
+  const r = new SR(); r.lang = 'en-GB'; r.interimResults = true; r.continuous = libre; r.maxAlternatives = 1;
+  let final = '', actif = true, t0 = Date.now(), minuteur;
+  const zone = $('#t_' + id), cpt = $('#c_' + id);
+  const fin = () => {
+    actif = false; clearInterval(minuteur); ecoute = null;
+    b.classList.remove('rec'); b.textContent = libre ? '🎤 Recommencer' : '🎤 Relire';
+    const texte = final.trim();
+    if (libre) etat.oral.libre[id] = { texte, secondes: Math.round((Date.now() - t0) / 1000) };
+    else etat.oral.lecture[id] = texte;
+    zone.textContent = texte || '(rien n’a été entendu, réessaie plus fort)';
+    $('#z_' + id).classList.toggle('fait', !!texte);
+    if (cpt) cpt.textContent = '';
+  };
+  r.onresult = ev => {
+    etat.oral.micro = true;
+    let prov = '';
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      if (ev.results[i].isFinal) final += ' ' + ev.results[i][0].transcript; else prov += ev.results[i][0].transcript;
+    }
+    zone.textContent = (final + ' ' + prov).trim();
+  };
+  r.onerror = ev => {
+    if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed' || ev.error === 'audio-capture') {
+      $('#micerr').textContent = '⚠️ Micro refusé ou introuvable. Autorise le micro (icône 🔒 dans la barre d’adresse) puis réessaie, ou envoie ton test sans l’oral.';
+      etat.oral.microRefuse = true; actif = false;
+    }
+  };
+  r.onend = () => { if (actif && libre && Date.now() - t0 < 60000) { try { r.start(); return; } catch (e) {} } fin(); };
+  ecoute = { arreter: () => { actif = false; r.stop(); } };
+  b.classList.add('rec'); b.textContent = libre ? '⏹ Terminer' : '🎙️ Je t’écoute…';
+  if (libre) minuteur = setInterval(() => { const s = Math.round((Date.now() - t0) / 1000); cpt.textContent = s + ' s / 60 s'; if (s >= 60) ecoute && ecoute.arreter(); }, 500);
+  try { r.start(); } catch (e) { fin(); }
+}
+
+/* ========================= NAVIGATION ========================= */
+$('#precedent').onclick = () => { if (ecoute) ecoute.arreter(); if (etat.page > 0) afficherPage(etat.page - 1); };
+$('#suivant').onclick = () => {
+  if (ecoute) ecoute.arreter();
+  const pg = etat.pages[etat.page];
+  if (pg.type === 'qcm') {
+    const manque = pg.groupes.some(g => g.items.some(it => !etat.reponses[it.id]));
+    if (manque) { $('#err').textContent = 'Réponds à toutes les questions (ou choisis « Je ne sais pas »).'; return; }
+  }
+  if (pg.type === 'oral') {
+    const o = etat.test.oral;
+    const faits = o.lecture.filter(l => etat.oral.lecture[l.id]).length + o.libre.filter(q => (etat.oral.libre[q.id] || {}).texte).length;
+    if (SR && !etat.oral.microRefuse && faits < o.lecture.length + o.libre.length &&
+        !confirm('Tu n’as pas fait toutes les parties de l’oral. Envoyer quand même ?')) return;
+    return envoyer();
+  }
+  afficherPage(etat.page + 1);
+};
+
+async function envoyer() {
+  $('#nav').classList.add('cache');
+  $('#barre div').style.width = '100%';
+  app.innerHTML = '<div class="carte resultat"><h2>Calcul de ton niveau…</h2><div class="spinner"></div><p class="mut">Ne ferme pas la page (jusqu’à 1 minute).</p></div>';
+  let r;
+  try { r = await api({ action:'submit', session:etat.session, reponses:etat.reponses, ecrit:etat.ecrit, oral:etat.oral }); }
+  catch (e) { r = { ok:false, erreur:'Envoi impossible. Ne ferme pas la page et appelle ton professeur.' }; }
+  if (!r.ok) {
+    app.innerHTML = `<div class="carte"><p class="erreur">${h(r.erreur)}</p><button class="btn" id="re">Réessayer</button></div>`;
+    $('#re').onclick = envoyer; return;
+  }
+  window.onbeforeunload = null;
+  const R = r.resultat;
+  app.innerHTML = `
+    <div class="carte resultat">
+      <p class="mut">Ton niveau d’anglais · Your English level</p>
+      <div class="grand">${h(R.final)}</div>
+      <p><b>${h(NIVEAUX[R.final] || '')}</b></p>
+      <p>${h(R.message || '')}</p>
+    </div>
+    <div class="carte"><h3>Détail par compétence</h3>
+      ${R.competences.map(c => `<div class="ligne"><span>${h(c.nom)}</span><span class="pastille">${h(c.niveau)}</span></div>`).join('')}
+      <p class="mut" style="margin-top:12px">✅ Ton résultat a été envoyé à City School. Merci et bravo ! 🎉</p>
+    </div>`;
+}
+
+accueil();
+</script>
+</body>
+</html>
