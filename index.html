@@ -317,7 +317,13 @@ async function envoyer() {
     <div class="carte"><h3>Détail par compétence</h3>
       ${R.competences.map(c => `<div class="ligne"><span>${h(c.nom)}</span><span class="pastille">${h(c.niveau)}</span></div>`).join('')}
       <p class="mut" style="margin-top:12px">✅ Ton résultat a été envoyé à City School. Merci et bravo ! 🎉</p>
+    </div>
+    <div class="carte resultat">
+      <button class="btn or" id="nouveau">🔄 Nouvel élève</button>
+      <p class="mut">La page se remet à zéro toute seule dans 2 minutes.</p>
     </div>`;
+  $('#nouveau').onclick = () => location.reload();
+  setTimeout(() => location.reload(), 120000);
 }
 
 accueil();
