@@ -65,7 +65,7 @@ const JNSP = '🤷 Je ne sais pas / I don’t know';
 const NIVEAUX = { 'Initiation':'Découverte', 'Pré-A1':'Premiers pas', 'A1':'Débutant', 'A2':'Élémentaire', 'B1':'Intermédiaire', 'B2':'Avancé', 'C1':'Très avancé' };
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-const etat = { tests:[], testChoisi:null, session:null, test:null, pages:[], page:0, reponses:{}, ecrit:[], oral:{ lecture:{}, libre:{}, micro:false }, ecoutes:{}, audios:{} };
+const etat = { tests:[], testChoisi:null, session:null, test:null, pages:[], page:0, reponses:{}, ecrit:[], oral:{ lecture:{}, libre:{}, micro:false }, essais:{}, ecoutes:{}, audios:{} };
 const $ = (s, el=document) => el.querySelector(s);
 const app = $('#app');
 const h = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -219,6 +219,12 @@ function pageEcrit() {
 
 /* ========================= ORAL ========================= */
 let ecoute = null;
+const MAX_LECTURE = 3;
+function scoreLecture(phrase, texte) {
+  const mots = s => (s || '').toLowerCase().replace(/[^a-z0-9' ]/g, ' ').split(/\s+/).filter(Boolean);
+  const dits = mots(texte);
+  return mots(phrase).filter(m => dits.indexOf(m) >= 0).length;
+}
 function pageOral() {
   const o = etat.test.oral;
   app.innerHTML = `
@@ -226,9 +232,9 @@ function pageOral() {
       <p>Tu vas parler en anglais dans le micro. Quand ton navigateur le demande, clique sur <b>« Autoriser »</b> pour le micro.</p>
       ${SR ? '' : '<p class="erreur">⚠️ L’oral automatique ne marche pas sur ce navigateur (utilise Google Chrome). Tu peux quand même envoyer ton test.</p>'}
       <div class="erreur" id="micerr"></div></div>
-    <div class="carte"><h3>A. Lis à voix haute · Read aloud</h3><p class="mut">Clique sur 🎤, lis la phrase clairement, puis attends.</p>
+    <div class="carte"><h3>A. Lis à voix haute · Read aloud</h3><p class="mut">Clique sur 🎤, lis la phrase clairement, puis attends. <b>3 essais maximum</b> par phrase : on garde ton meilleur.</p>
       ${o.lecture.map(l => `<div class="rec-zone ${etat.oral.lecture[l.id] ? 'fait' : ''}" id="z_${l.id}"><div class="texte" style="font-size:19px">${h(l.phrase)}</div>
-        <p><button class="btn" data-lire="${l.id}" ${SR ? '' : 'disabled'}>🎤 Lire</button></p><div class="transcr" id="t_${l.id}">${h(etat.oral.lecture[l.id] || '')}</div></div>`).join('')}
+        <p><button class="btn" data-lire="${l.id}" ${SR && (etat.essais[l.id] || 0) < MAX_LECTURE ? '' : 'disabled'}>${(etat.essais[l.id] || 0) >= MAX_LECTURE ? '✅ 3 essais utilisés' : (etat.essais[l.id] ? '🎤 Relire' : '🎤 Lire')}</button> <span class="mut" id="e_${l.id}">${etat.essais[l.id] ? 'Essai ' + etat.essais[l.id] + '/' + MAX_LECTURE : ''}</span></p><div class="transcr" id="t_${l.id}">${h(etat.oral.lecture[l.id] || '')}</div></div>`).join('')}
     </div>
     <div class="carte"><h3>B. Réponds · Answer the questions</h3><p class="mut">Clique sur 🎤, réponds en anglais (jusqu’à 1 minute), puis clique sur ⏹. Fais des phrases complètes !</p>
       ${o.libre.map(q => `<div class="rec-zone ${etat.oral.libre[q.id] ? 'fait' : ''}" id="z_${q.id}"><div class="q">${h(q.question)}</div>
@@ -248,10 +254,22 @@ function enregistrer(b, id, libre) {
     actif = false; clearInterval(minuteur); ecoute = null;
     b.classList.remove('rec'); b.textContent = libre ? '🎤 Recommencer' : '🎤 Relire';
     const texte = final.trim();
-    if (libre) etat.oral.libre[id] = { texte, secondes: Math.round((Date.now() - t0) / 1000) };
-    else etat.oral.lecture[id] = texte;
-    zone.textContent = texte || '(rien n’a été entendu, réessaie plus fort)';
-    $('#z_' + id).classList.toggle('fait', !!texte);
+    if (libre) {
+      etat.oral.libre[id] = { texte, secondes: Math.round((Date.now() - t0) / 1000) };
+      zone.textContent = texte || '(rien n’a été entendu, réessaie plus fort)';
+    } else if (!texte) {
+      zone.textContent = etat.oral.lecture[id] || '(rien n’a été entendu, réessaie plus fort · cet essai ne compte pas)';
+      if (!etat.essais[id]) b.textContent = '🎤 Lire';
+    } else {
+      const n = (etat.essais[id] || 0) + 1; etat.essais[id] = n;
+      const phrase = ((etat.test.oral.lecture || []).find(l => l.id === id) || {}).phrase || '';
+      const avant = etat.oral.lecture[id];
+      if (!avant || scoreLecture(phrase, texte) >= scoreLecture(phrase, avant)) etat.oral.lecture[id] = texte;
+      zone.textContent = etat.oral.lecture[id];
+      $('#e_' + id).textContent = 'Essai ' + n + '/' + MAX_LECTURE + (n > 1 ? ' · meilleur essai gardé' : '');
+      if (n >= MAX_LECTURE) { b.disabled = true; b.textContent = '✅ 3 essais utilisés'; }
+    }
+    $('#z_' + id).classList.toggle('fait', !!(libre ? texte : etat.oral.lecture[id]));
     if (cpt) cpt.textContent = '';
   };
   r.onresult = ev => {
