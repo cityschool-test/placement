@@ -65,7 +65,7 @@ const JNSP = '🤷 Je ne sais pas / I don’t know';
 const NIVEAUX = { 'Initiation':'Découverte', 'Pré-A1':'Premiers pas', 'A1':'Débutant', 'A2':'Élémentaire', 'B1':'Intermédiaire', 'B2':'Avancé', 'C1':'Très avancé' };
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-const etat = { tests:[], testChoisi:null, session:null, test:null, pages:[], page:0, reponses:{}, ecrit:[], oral:{ lecture:{}, libre:{}, micro:false }, essais:{}, ecoutes:{}, audios:{} };
+const etat = { tests:[], testChoisi:null, session:null, test:null, pages:[], page:0, reponses:{}, ecrit:[], oral:{ lecture:{}, libre:{}, micro:false }, essais:{}, ecoutes:{}, audios:{}, enreg:{}, enregP:[] };
 const $ = (s, el=document) => el.querySelector(s);
 const app = $('#app');
 const h = (s) => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -222,6 +222,27 @@ function pageEcrit() {
 /* ========================= ORAL ========================= */
 let ecoute = null;
 const MAX_LECTURE = 3;
+/* Enregistrement de la voix (pour que le professeur puisse l’écouter) */
+const MIME_ENREG = ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']
+  .find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || '';
+let flux = null;
+async function ouvrirMicro() {
+  if (flux || !MIME_ENREG || !navigator.mediaDevices) return flux;
+  try { flux = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation:true, noiseSuppression:true } }); } catch (e) { flux = null; }
+  return flux;
+}
+function demarrerEnreg() {
+  if (!flux) return null;
+  try {
+    const morceaux = [], mr = new MediaRecorder(flux, { mimeType: MIME_ENREG, audioBitsPerSecond: 32000 });
+    mr.ondataavailable = e => { if (e.data && e.data.size) morceaux.push(e.data); };
+    const fini = new Promise(ok => { mr.onstop = () => ok(new Blob(morceaux, { type: MIME_ENREG.split(';')[0] })); });
+    mr.start(1000);
+    return () => { if (mr.state !== 'inactive') mr.stop(); return fini; };
+  } catch (e) { return null; }
+}
+function garderEnreg(id, p) { if (p) etat.enregP.push(p.then(b => { if (b && b.size > 1000) etat.enreg[id] = b; })); }
+function enBase64(b) { return new Promise(ok => { const f = new FileReader(); f.onload = () => ok(String(f.result).split(',')[1] || ''); f.onerror = () => ok(''); f.readAsDataURL(b); }); }
 function scoreLecture(phrase, texte) {
   const mots = s => (s || '').toLowerCase().replace(/[^a-z0-9' ]/g, ' ').split(/\s+/).filter(Boolean);
   const dits = mots(texte);
@@ -232,6 +253,7 @@ function pageOral() {
   app.innerHTML = `
     <div class="carte"><h2>🎤 Parler · Speaking</h2>
       <p>Tu vas parler en anglais dans le micro. Quand ton navigateur le demande, clique sur <b>« Autoriser »</b> pour le micro.</p>
+      <p class="mut">🔴 Ta voix est enregistrée : ton professeur d’anglais pourra l’écouter. Your voice is recorded for your English teacher.</p>
       ${SR ? '' : '<p class="erreur">⚠️ L’oral automatique ne marche pas sur ce navigateur (utilise Google Chrome). Tu peux quand même envoyer ton test.</p>'}
       <div class="erreur" id="micerr"></div></div>
     <div class="carte"><h3>A. Lis à voix haute · Read aloud</h3><p class="mut">Clique sur 🎤, lis la phrase clairement, puis attends. <b>3 essais maximum</b> par phrase : on garde ton meilleur.</p>
@@ -247,8 +269,11 @@ function pageOral() {
   app.querySelectorAll('[data-rep]').forEach(b => b.onclick = () => enregistrer(b, b.dataset.rep, true));
 }
 
-function enregistrer(b, id, libre) {
+async function enregistrer(b, id, libre) {
   if (ecoute) { ecoute.arreter(); return; }
+  if (b.dataset.attente) return;
+  b.dataset.attente = '1'; await ouvrirMicro(); delete b.dataset.attente;
+  const stopEnreg = demarrerEnreg();
   const r = new SR(); r.lang = 'en-GB'; r.interimResults = true; r.continuous = libre; r.maxAlternatives = 1;
   let final = '', actif = true, t0 = Date.now(), minuteur;
   const zone = $('#t_' + id), cpt = $('#c_' + id);
@@ -256,8 +281,10 @@ function enregistrer(b, id, libre) {
     actif = false; clearInterval(minuteur); ecoute = null;
     b.classList.remove('rec'); b.textContent = libre ? '🎤 Recommencer' : '🎤 Relire';
     const texte = final.trim();
+    const enreg = stopEnreg ? stopEnreg() : null;
     if (libre) {
       etat.oral.libre[id] = { texte, secondes: Math.round((Date.now() - t0) / 1000) };
+      if (texte) garderEnreg(id, enreg);
       zone.textContent = texte || '(rien n’a été entendu, réessaie plus fort)';
     } else if (!texte) {
       zone.textContent = etat.oral.lecture[id] || '(rien n’a été entendu, réessaie plus fort · cet essai ne compte pas)';
@@ -266,7 +293,7 @@ function enregistrer(b, id, libre) {
       const n = (etat.essais[id] || 0) + 1; etat.essais[id] = n;
       const phrase = ((etat.test.oral.lecture || []).find(l => l.id === id) || {}).phrase || '';
       const avant = etat.oral.lecture[id];
-      if (!avant || scoreLecture(phrase, texte) >= scoreLecture(phrase, avant)) etat.oral.lecture[id] = texte;
+      if (!avant || scoreLecture(phrase, texte) >= scoreLecture(phrase, avant)) { etat.oral.lecture[id] = texte; garderEnreg(id, enreg); }
       zone.textContent = etat.oral.lecture[id];
       $('#e_' + id).textContent = 'Essai ' + n + '/' + MAX_LECTURE + (n > 1 ? ' · meilleur essai gardé' : '');
       if (n >= MAX_LECTURE) { b.disabled = true; b.textContent = '✅ 3 essais utilisés'; }
@@ -318,14 +345,19 @@ async function envoyer() {
   $('#nav').classList.add('cache');
   $('#barre div').style.width = '100%';
   app.innerHTML = '<div class="carte resultat"><h2>Calcul de ton niveau…</h2><div class="spinner"></div><p class="mut">Ne ferme pas la page (jusqu’à 1 minute).</p></div>';
-  let r;
-  try { r = await api({ action:'submit', session:etat.session, reponses:etat.reponses, ecrit:etat.ecrit, oral:etat.oral }); }
+  let r, enreg = [];
+  try {
+    await Promise.all(etat.enregP);
+    for (const id of Object.keys(etat.enreg)) { const data = await enBase64(etat.enreg[id]); if (data) enreg.push({ id, type: etat.enreg[id].type, data }); }
+  } catch (e) { enreg = []; }
+  try { r = await api({ action:'submit', session:etat.session, reponses:etat.reponses, ecrit:etat.ecrit, oral:etat.oral, enreg }); }
   catch (e) { r = { ok:false, erreur:'Envoi impossible. Ne ferme pas la page et appelle ton professeur.' }; }
   if (!r.ok) {
     app.innerHTML = `<div class="carte"><p class="erreur">${h(r.erreur)}</p><button class="btn" id="re">Réessayer</button></div>`;
     $('#re').onclick = envoyer; return;
   }
   window.onbeforeunload = null;
+  if (flux) { flux.getTracks().forEach(tr => tr.stop()); flux = null; }
   const R = r.resultat;
   app.innerHTML = `
     <div class="carte resultat">
